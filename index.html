@@ -365,6 +365,8 @@
       running: false,
       levelIndex: 0,
       score: 0,
+      combo: 1,
+      bestCombo: 1,
       lastTime: 0,
       message: "Gor Victor klar",
       pulse: 0,
@@ -372,6 +374,9 @@
       particles: [],
       cameraX: 0,
       shake: 0,
+      flash: 0,
+      zoom: 1,
+      timeScale: 1,
       victor: null,
       course: null,
       controls: {
@@ -409,17 +414,25 @@
     function buildCourse(levelIndex) {
       const width = canvas.clientWidth || window.innerWidth;
       const height = canvas.clientHeight || window.innerHeight;
+      const jumpProfiles = [
+        { lip: 150, gap: 220, landing: 260, rise: 90, drop: 250 },
+        { lip: 165, gap: 250, landing: 290, rise: 104, drop: 270 },
+        { lip: 190, gap: 285, landing: 330, rise: 120, drop: 296 }
+      ];
+      const profile = jumpProfiles[Math.min(2, Math.floor(levelIndex / 7))];
+      const jumpBase = width * 1.65 + levelIndex * 28;
       return {
         width,
         height,
         worldLength: width * 3.2 + levelIndex * 170,
         baseY: height * 0.22,
-        slopeDrop: 250 + levelIndex * 12,
-        jumpStartX: width * 1.65 + levelIndex * 28,
-        takeoffEndX: width * 1.65 + levelIndex * 28 + 150 + levelIndex * 7,
-        landingStartX: width * 1.65 + levelIndex * 28 + 370 + levelIndex * 17,
-        landingEndX: width * 1.65 + levelIndex * 28 + 630 + levelIndex * 26,
-        landingRise: 90 + levelIndex * 4,
+        slopeDrop: profile.drop + levelIndex * 12,
+        jumpStartX: jumpBase,
+        takeoffEndX: jumpBase + profile.lip + levelIndex * 7,
+        landingStartX: jumpBase + profile.lip + profile.gap + levelIndex * 10,
+        landingEndX: jumpBase + profile.lip + profile.gap + profile.landing + levelIndex * 9,
+        landingRise: profile.rise + levelIndex * 4,
+        takeoffKick: 310 + levelIndex * 9 + Math.floor(levelIndex / 5) * 24,
         scenery: Array.from({ length: 54 }, (_, i) => ({
           type: i % 6 === 0 ? "rock" : "pine",
           x: 150 + ((width * 3.2 + levelIndex * 170) - 300) * (i / 54) + Math.sin(i * 1.4) * 60,
@@ -445,6 +458,8 @@
         flipDeg: 0,
         flipRate: 0,
         totalGrabTime: 0,
+        pose: 0,
+        airTime: 0,
         trail: []
       };
       state.victor.worldY = getLandingY(state.victor.worldX);
@@ -452,6 +467,9 @@
       state.cameraX = 0;
       state.particles = [];
       state.stars = [];
+      state.flash = 0;
+      state.timeScale = 1;
+      state.zoom = 1;
       state.message = "Byg fart mod hoppet";
       updateHud();
     }
@@ -460,6 +478,8 @@
       state.running = true;
       state.levelIndex = 0;
       state.score = 0;
+      state.combo = 1;
+      state.bestCombo = 1;
       state.stars = [];
       leadText.textContent =
         "Victor skal klare 20 baner. Hver bane giver dig et trick, som skal landes rent efter hoppet. Du kommer kun videre, hvis Victor lander pa skiene og matcher det krav, banen stiller.";
@@ -488,6 +508,8 @@
     function failLevel(reason) {
       state.message = reason;
       state.shake = 16;
+      state.flash = 0.22;
+      state.combo = 1;
       state.victor.crashed = true;
       state.victor.finished = true;
       setTimeout(() => {
@@ -508,10 +530,17 @@
       const cleanAngle = Math.abs(normalizeAngle(state.victor.flipDeg - slopeAngle)) < 26;
 
       if (spinOk && flipOk && grabOk && cleanAngle) {
-        const points = LEVELS[state.levelIndex].points + Math.round(state.victor.totalGrabTime * 150);
+        const extraSpin = Math.max(0, spin - goal.spin);
+        const extraFlips = Math.max(0, flips - goal.flips);
+        const styleBonus = (grabbed ? 150 : 0) + extraSpin * 2 + extraFlips * 220 + Math.round(state.victor.airTime * 120);
+        const comboApplied = state.combo;
+        const points = Math.round((LEVELS[state.levelIndex].points + styleBonus) * comboApplied);
         state.score += points;
-        state.message = "Perfekt landing! +" + points;
+        state.combo = Math.min(state.combo + 0.35 + extraFlips * 0.2 + (grabbed ? 0.1 : 0), 4);
+        state.bestCombo = Math.max(state.bestCombo, state.combo);
+        state.message = "Perfekt landing! +" + points + " x" + comboApplied.toFixed(1);
         state.shake = 10;
+        state.flash = 0.16;
         spawnStars();
         updateHud();
         setTimeout(() => {
@@ -569,11 +598,14 @@
     }
 
     function update(dt) {
-      state.pulse += dt;
-      state.shake = Math.max(0, state.shake - dt * 22);
+      const step = dt * state.timeScale;
+      state.pulse += step;
+      state.shake = Math.max(0, state.shake - step * 22);
+      state.flash = Math.max(0, state.flash - step * 1.8);
+      state.timeScale = lerp(state.timeScale, 1, 0.08);
       const victor = state.victor;
       if (!victor || victor.finished) {
-        updateStars(dt);
+        updateStars(step);
         return;
       }
 
@@ -581,38 +613,47 @@
       if (victor.trail.length > 18) victor.trail.shift();
 
       if (!victor.airborne) {
+        const jumpApproach = clamp((victor.worldX - (state.course.jumpStartX - 180)) / 180, 0, 1);
+        victor.pose = lerp(victor.pose, jumpApproach * 0.9, 0.18);
         victor.bodyAngle = lerp(victor.bodyAngle, getGroundAngle(victor.worldX), 0.18);
-        victor.vx += (80 + state.levelIndex * 5) * dt;
-        victor.worldX += victor.vx * dt;
+        victor.vx += (80 + state.levelIndex * 5) * step;
+        victor.worldX += victor.vx * step;
         victor.worldY = getLandingY(victor.worldX);
         emitSnow(victor, 2, 80);
 
         if (victor.worldX >= state.course.takeoffEndX - 10) {
           victor.airborne = true;
-          victor.vy = -310 - state.levelIndex * 9;
+          victor.airTime = 0;
+          victor.vy = -state.course.takeoffKick;
           victor.bodyAngle = getGroundAngle(state.course.takeoffEndX - 6);
+          victor.pose = 1;
+          state.timeScale = 0.72;
+          state.shake = Math.max(state.shake, 6);
+          state.flash = 0.08;
           state.message = "Nu! Lav " + describeGoal(LEVELS[state.levelIndex].goal);
           updateHud();
         }
       } else {
+        victor.airTime += step;
+        victor.pose = lerp(victor.pose, state.controls.grab ? 0.85 : 0.22, 0.2);
         const spinInput = (state.controls.spinRight ? 1 : 0) - (state.controls.spinLeft ? 1 : 0);
-        victor.spinRate += spinInput * 1850 * dt;
+        victor.spinRate += spinInput * 1850 * step;
         victor.spinRate *= 0.987;
-        victor.spinDeg += victor.spinRate * dt;
+        victor.spinDeg += victor.spinRate * step;
 
         if (state.controls.flip) {
-          victor.flipRate += 2150 * dt;
+          victor.flipRate += 2150 * step;
         } else {
           victor.flipRate *= 0.992;
         }
 
         victor.flipRate = Math.min(victor.flipRate, 1080);
-        victor.flipDeg += victor.flipRate * dt;
-        if (state.controls.grab) victor.totalGrabTime += dt;
+        victor.flipDeg += victor.flipRate * step;
+        if (state.controls.grab) victor.totalGrabTime += step;
 
-        victor.worldX += victor.vx * dt;
-        victor.vy += 760 * dt;
-        victor.worldY += victor.vy * dt;
+        victor.worldX += victor.vx * step;
+        victor.vy += 760 * step;
+        victor.worldY += victor.vy * step;
         if (Math.random() < 0.4) emitSnow(victor, 1, 30);
 
         const landingY = getLandingY(victor.worldX);
@@ -620,6 +661,7 @@
           victor.worldY = landingY;
           victor.airborne = false;
           victor.finished = true;
+          victor.pose = 1;
           emitSnow(victor, 20, 170);
           landLevel();
         }
@@ -640,7 +682,12 @@
         clamp(targetCamera, 0, state.course.worldLength - state.course.width * 0.2),
         0.12
       );
-      updateStars(dt);
+      state.zoom = lerp(
+        state.zoom,
+        victor.airborne ? 0.93 : clamp(1.04 - victor.vx / 1700, 0.93, 1.02),
+        0.08
+      );
+      updateStars(step);
     }
 
     function updateStars(dt) {
@@ -845,26 +892,27 @@
       ctx.rotate(victor.airborne ? normalizeAngle(victor.flipDeg) * Math.PI / 180 : victor.bodyAngle);
       ctx.scale(1, victor.airborne ? clamp(Math.cos(victor.flipDeg * Math.PI / 180), -1, 1) : 1);
       ctx.rotate((victor.airborne ? normalizeAngle(victor.spinDeg) * Math.PI / 180 : 0) * 0.25);
+      ctx.translate(0, victor.pose * 6);
 
       ctx.lineWidth = 4;
       ctx.lineCap = "round";
       ctx.strokeStyle = "#ef4d3f";
       ctx.beginPath();
-      ctx.moveTo(-34, 28);
-      ctx.lineTo(30, 22);
-      ctx.moveTo(-30, 33);
-      ctx.lineTo(34, 27);
+      ctx.moveTo(-34, 28 - victor.pose * 3);
+      ctx.lineTo(30, 22 + victor.pose * 2);
+      ctx.moveTo(-30, 33 - victor.pose * 3);
+      ctx.lineTo(34, 27 + victor.pose * 2);
       ctx.stroke();
 
       ctx.strokeStyle = victor.crashed ? "#ff8d8d" : "#0f2940";
       ctx.lineWidth = 5;
       ctx.beginPath();
       ctx.moveTo(-6, -2);
-      ctx.lineTo(-16, 20);
+      ctx.lineTo(-16 - victor.pose * 2, 20 - victor.pose * 8);
       ctx.moveTo(6, -2);
-      ctx.lineTo(16, 20);
+      ctx.lineTo(16 + victor.pose * 2, 20 - victor.pose * 8);
       ctx.moveTo(0, -18);
-      ctx.lineTo(0, 8);
+      ctx.lineTo(0, 8 - victor.pose * 3);
       ctx.stroke();
 
       ctx.lineWidth = 4;
@@ -957,10 +1005,11 @@
       const airSpin = Math.round(Math.abs(state.victor.spinDeg) / 180) * 180;
       const flips = Math.round(Math.abs(state.victor.flipDeg) / 360);
       const grab = state.victor.totalGrabTime > 0.18 ? "Ja" : "Nej";
+      const trickNow = airSpin + (flips ? " + " + flips + (flips === 1 ? " flip" : " flips") : "") + (grab === "Ja" ? " + grab" : "");
       const x = 16;
-      const y = height - 166;
+      const y = height - 184;
       const w = Math.min(width - 32, 350);
-      const h = 112;
+      const h = 130;
 
       ctx.fillStyle = "rgba(6,22,33,0.78)";
       ctx.strokeStyle = "rgba(255,255,255,0.15)";
@@ -978,9 +1027,10 @@
       ctx.fillText(describeGoal(goal), x + 14, y + 48);
 
       ctx.font = "14px Trebuchet MS";
-      ctx.fillText("Nu: " + airSpin + " / flips: " + flips + " / grab: " + grab, x + 14, y + 76);
+      ctx.fillText("Nu: " + trickNow, x + 14, y + 76);
+      ctx.fillText("Combo: x" + state.combo.toFixed(1) + " / Bedst: x" + state.bestCombo.toFixed(1), x + 14, y + 96);
       ctx.fillStyle = "#ffd978";
-      ctx.fillText(state.message, x + 14, y + 96);
+      ctx.fillText(state.message, x + 14, y + 116);
     }
 
     function roundRect(x, y, w, h, r) {
@@ -1001,12 +1051,19 @@
       const shakeY = state.shake ? (Math.random() - 0.5) * state.shake * 0.7 : 0;
       ctx.save();
       ctx.translate(shakeX, shakeY);
+      ctx.translate(width * 0.5, height * 0.5);
+      ctx.scale(state.zoom, state.zoom);
+      ctx.translate(-width * 0.5, -height * 0.5);
       drawBackground(width, height);
       drawCourse(width, height);
       drawVictor();
       drawStars();
       if (state.victor) {
         drawGoalCard(width, height);
+      }
+      if (state.flash > 0) {
+        ctx.fillStyle = "rgba(255,255,255," + (state.flash * 0.45).toFixed(3) + ")";
+        ctx.fillRect(0, 0, width, height);
       }
       ctx.restore();
     }

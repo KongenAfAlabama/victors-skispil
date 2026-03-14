@@ -1,0 +1,10 @@
+{
+  "name": "Victors Skispil",
+  "short_name": "Skispil",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#eff9ff",
+  "theme_color": "#15364d",
+  "orientation": "portrait",
+  "lang": "da"
+}

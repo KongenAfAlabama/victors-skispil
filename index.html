@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#15364d">
+  <title>Victors Skispil</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root {
+      --bg-top: #a5ddff;
+      --bg-bottom: #eff9ff;
+      --ink: #10202d;
+      --accent: #f76839;
+      --accent-soft: #ffd5c8;
+      --ice: rgba(255, 255, 255, 0.72);
+      --panel: rgba(15, 39, 56, 0.76);
+      --success: #78f3a8;
+      --danger: #ff7c7c;
+      --gold: #ffd869;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      overflow: hidden;
+      font-family: "Trebuchet MS", "Avenir Next", sans-serif;
+      color: #fff;
+      background:
+        radial-gradient(circle at top, rgba(255, 255, 255, 0.7), transparent 32%),
+        linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+
+    .app {
+      position: relative;
+      width: min(100vw, 900px);
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% -10%, rgba(255,255,255,0.95), transparent 36%),
+        linear-gradient(180deg, rgba(255,255,255,0.06), rgba(10,33,48,0.08));
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .hud,
+    .controls,
+    .overlay {
+      position: absolute;
+      inset-inline: 0;
+    }
+
+    .hud {
+      top: 0;
+      padding: max(14px, env(safe-area-inset-top)) 14px 0;
+      pointer-events: none;
+    }
+
+    .hud-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .card {
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 18px;
+      padding: 12px 14px;
+      box-shadow: 0 12px 40px rgba(6, 20, 29, 0.18);
+    }
+
+    .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      opacity: 0.72;
+    }
+
+    .value {
+      margin-top: 6px;
+      font-size: clamp(17px, 2.8vw, 25px);
+      font-weight: 700;
+      line-height: 1.15;
+    }
+
+    .sub {
+      margin-top: 4px;
+      font-size: 13px;
+      opacity: 0.84;
+    }
+
+    .progress {
+      margin-top: 12px;
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.16);
+    }
+
+    .progress > span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--gold), var(--accent));
+      transition: width 220ms ease;
+    }
+
+    .controls {
+      bottom: 0;
+      padding:
+        0 14px
+        max(18px, calc(env(safe-area-inset-bottom) + 10px));
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 14px;
+      pointer-events: none;
+    }
+
+    .cluster {
+      display: grid;
+      gap: 10px;
+      pointer-events: auto;
+    }
+
+    .cluster.left {
+      grid-template-columns: repeat(2, minmax(82px, 1fr));
+    }
+
+    .cluster.right {
+      grid-template-columns: repeat(2, minmax(82px, 1fr));
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 22px;
+      min-height: 66px;
+      padding: 12px 14px;
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      background: linear-gradient(180deg, rgba(20,59,82,0.92), rgba(9,26,37,0.96));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 12px 30px rgba(0,0,0,0.22);
+      transition: transform 90ms ease, background 120ms ease;
+    }
+
+    button:active,
+    button.active {
+      transform: translateY(2px) scale(0.985);
+      background: linear-gradient(180deg, rgba(247,104,57,0.96), rgba(189,74,36,0.98));
+    }
+
+    .small {
+      font-size: 12px;
+      opacity: 0.78;
+      display: block;
+      margin-top: 5px;
+    }
+
+    .overlay {
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: linear-gradient(180deg, rgba(9, 29, 40, 0.28), rgba(8, 19, 30, 0.56));
+    }
+
+    .modal {
+      width: min(100%, 540px);
+      border-radius: 28px;
+      padding: 22px;
+      background: rgba(7, 27, 39, 0.82);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(255,255,255,0.18);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.3);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 7vw, 48px);
+      line-height: 0.95;
+      letter-spacing: 0.01em;
+    }
+
+    .lead {
+      margin: 14px 0 0;
+      font-size: 15px;
+      line-height: 1.45;
+      color: rgba(255,255,255,0.9);
+    }
+
+    .pill-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 16px 0 0;
+    }
+
+    .pill {
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.12);
+      font-size: 13px;
+    }
+
+    .start {
+      width: 100%;
+      margin-top: 18px;
+      min-height: 64px;
+      font-size: 18px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (max-width: 640px) {
+      .hud-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .controls {
+        gap: 10px;
+      }
+
+      .cluster.left,
+      .cluster.right {
+        grid-template-columns: repeat(2, minmax(72px, 1fr));
+      }
+
+      button {
+        min-height: 62px;
+        padding: 10px;
+        border-radius: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <canvas id="game" aria-label="Victors Skispil"></canvas>
+
+    <div class="hud">
+      <div class="hud-grid">
+        <div class="card">
+          <div class="label">Bane</div>
+          <div class="value" id="levelLabel">1 / 20</div>
+          <div class="sub" id="goalLabel">Mål: 360</div>
+        </div>
+        <div class="card">
+          <div class="label">Status</div>
+          <div class="value" id="statusLabel">Gør Victor klar</div>
+          <div class="sub" id="scoreLabel">Score: 0</div>
+          <div class="progress"><span id="progressBar"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="cluster left">
+        <button data-control="spinLeft">
+          Spin venstre
+          <span class="small">A / venstre</span>
+        </button>
+        <button data-control="spinRight">
+          Spin hojre
+          <span class="small">D / hojre</span>
+        </button>
+      </div>
+
+      <div class="cluster right">
+        <button data-control="flip">
+          Skrue
+          <span class="small">W / op</span>
+        </button>
+        <button data-control="grab">
+          Grab
+          <span class="small">Space</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="overlay" id="overlay">
+      <div class="modal">
+        <h1>Victors Skispil</h1>
+        <p class="lead">
+          Victor skal klare 20 baner. Hver bane giver dig et trick, som skal landes rent efter hoppet.
+          Du kommer kun videre, hvis Victor lander pa skiene og matcher det krav, banen stiller.
+        </p>
+        <div class="pill-list">
+          <div class="pill">Hold spin venstre eller hojre i luften</div>
+          <div class="pill">Brug skrue til flips</div>
+          <div class="pill">Hold grab for ekstra style og point</div>
+          <div class="pill">Svigt ikke landingen, ellers starter banen forfra</div>
+        </div>
+        <button class="start" id="startButton">Start turen</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const LEVELS = [
+      { goal: { spin: 180, flips: 0, grab: false }, points: 100 },
+      { goal: { spin: 360, flips: 0, grab: false }, points: 160 },
+      { goal: { spin: 360, flips: 0, grab: true }, points: 220 },
+      { goal: { spin: 540, flips: 0, grab: false }, points: 260 },
+      { goal: { spin: 540, flips: 1, grab: false }, points: 320 },
+      { goal: { spin: 360, flips: 1, grab: true }, points: 360 },
+      { goal: { spin: 720, flips: 0, grab: false }, points: 400 },
+      { goal: { spin: 540, flips: 1, grab: true }, points: 430 },
+      { goal: { spin: 720, flips: 1, grab: false }, points: 470 },
+      { goal: { spin: 720, flips: 1, grab: true }, points: 520 },
+      { goal: { spin: 900, flips: 0, grab: false }, points: 560 },
+      { goal: { spin: 900, flips: 1, grab: false }, points: 620 },
+      { goal: { spin: 1080, flips: 0, grab: true }, points: 680 },
+      { goal: { spin: 900, flips: 2, grab: false }, points: 760 },
+      { goal: { spin: 1080, flips: 1, grab: true }, points: 840 },
+      { goal: { spin: 1260, flips: 1, grab: false }, points: 930 },
+      { goal: { spin: 1080, flips: 2, grab: true }, points: 1040 },
+      { goal: { spin: 1260, flips: 2, grab: false }, points: 1160 },
+      { goal: { spin: 1440, flips: 1, grab: true }, points: 1280 },
+      { goal: { spin: 1440, flips: 2, grab: true }, points: 1500 }
+    ];
+
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const overlay = document.getElementById("overlay");
+    const startButton = document.getElementById("startButton");
+    const leadText = document.querySelector(".lead");
+    const levelLabel = document.getElementById("levelLabel");
+    const goalLabel = document.getElementById("goalLabel");
+    const statusLabel = document.getElementById("statusLabel");
+    const scoreLabel = document.getElementById("scoreLabel");
+    const progressBar = document.getElementById("progressBar");
+    const buttons = [...document.querySelectorAll("[data-control]")];
+
+    const state = {
+      running: false,
+      levelIndex: 0,
+      score: 0,
+      lastTime: 0,
+      message: "Gor Victor klar",
+      pulse: 0,
+      stars: [],
+      victor: null,
+      course: null,
+      controls: {
+        spinLeft: false,
+        spinRight: false,
+        flip: false,
+        grab: false
+      }
+    };
+
+    function describeGoal(goal) {
+      const parts = [];
+      if (goal.spin) parts.push(String(goal.spin));
+      if (goal.flips) parts.push(goal.flips === 1 ? "1 skrue" : goal.flips + " skruer");
+      if (goal.grab) parts.push("grab");
+      return parts.join(" + ");
+    }
+
+    function setCanvasSize() {
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.round(rect.width * ratio);
+      canvas.height = Math.round(rect.height * ratio);
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+
+    function buildCourse(levelIndex) {
+      const width = canvas.clientWidth || window.innerWidth;
+      const height = canvas.clientHeight || window.innerHeight;
+      const jumpLength = width * (0.18 + levelIndex * 0.003);
+      const jumpHeight = 60 + levelIndex * 3.4;
+      const landingDrop = 84 + levelIndex * 4;
+      return {
+        width,
+        height,
+        slopeStartY: height * 0.34,
+        jumpStartX: width * 0.66,
+        jumpLength,
+        jumpHeight,
+        landingX: width * 0.66 + jumpLength + width * 0.07,
+        landingY: height * 0.34 + landingDrop
+      };
+    }
+
+    function resetVictor() {
+      const course = buildCourse(state.levelIndex);
+      state.course = course;
+      state.victor = {
+        x: 110,
+        y: course.slopeStartY - 8,
+        vx: 180 + state.levelIndex * 7,
+        vy: 0,
+        airborne: false,
+        finished: false,
+        crashed: false,
+        spinDeg: 0,
+        spinRate: 0,
+        flipDeg: 0,
+        flipRate: 0,
+        grabTime: 0,
+        totalGrabTime: 0,
+        maxHeight: 0,
+        trail: []
+      };
+      state.message = "Byg fart mod hoppet";
+      updateHud();
+    }
+
+    function startGame() {
+      state.running = true;
+      state.levelIndex = 0;
+      state.score = 0;
+      state.stars = [];
+      leadText.textContent =
+        "Victor skal klare 20 baner. Hver bane giver dig et trick, som skal landes rent efter hoppet. Du kommer kun videre, hvis Victor lander pa skiene og matcher det krav, banen stiller.";
+      startButton.textContent = "Start turen";
+      overlay.classList.add("hidden");
+      resetVictor();
+      state.lastTime = performance.now();
+      requestAnimationFrame(loop);
+    }
+
+    function nextLevel() {
+      state.levelIndex += 1;
+      if (state.levelIndex >= LEVELS.length) {
+        state.running = false;
+        statusLabel.textContent = "Victor klarede alle 20 baner!";
+        goalLabel.textContent = "Hele bjerget er besejret";
+        overlay.classList.remove("hidden");
+        leadText.textContent =
+          "Victor vandt hele bjerget med " + state.score + " point. Tryk nedenfor for at starte et nyt run.";
+        startButton.textContent = "Spil igen";
+        return;
+      }
+      resetVictor();
+    }
+
+    function failLevel(reason) {
+      state.message = reason;
+      state.victor.crashed = true;
+      state.victor.finished = true;
+      setTimeout(() => {
+        if (!state.running) return;
+        resetVictor();
+      }, 1200);
+    }
+
+    function landLevel() {
+      const goal = LEVELS[state.levelIndex].goal;
+      const spin = Math.round(Math.abs(state.victor.spinDeg) / 180) * 180;
+      const flips = Math.round(Math.abs(state.victor.flipDeg) / 360);
+      const grabbed = state.victor.totalGrabTime > 0.22;
+      const spinOk = spin >= goal.spin;
+      const flipOk = flips >= goal.flips;
+      const grabOk = !goal.grab || grabbed;
+      const cleanAngle = Math.abs(normalizeAngle(state.victor.flipDeg)) < 22;
+
+      if (spinOk && flipOk && grabOk && cleanAngle) {
+        const points = LEVELS[state.levelIndex].points + Math.round(state.victor.totalGrabTime * 120);
+        state.score += points;
+        state.message = "Perfekt landing! +" + points;
+        spawnStars();
+        updateHud();
+        setTimeout(() => {
+          if (state.running) nextLevel();
+        }, 1200);
+      } else {
+        const miss = [];
+        if (!spinOk) miss.push("mere spin");
+        if (!flipOk) miss.push("flere skruer");
+        if (!grabOk) miss.push("grab");
+        if (!cleanAngle) miss.push("ren landing");
+        failLevel("For lidt " + miss.join(", "));
+      }
+    }
+
+    function normalizeAngle(value) {
+      let deg = value % 360;
+      if (deg > 180) deg -= 360;
+      if (deg < -180) deg += 360;
+      return deg;
+    }
+
+    function updateHud() {
+      const level = LEVELS[state.levelIndex];
+      levelLabel.textContent = (state.levelIndex + 1) + " / " + LEVELS.length;
+      goalLabel.textContent = "Mal: " + describeGoal(level.goal);
+      statusLabel.textContent = state.message;
+      scoreLabel.textContent = "Score: " + state.score;
+      progressBar.style.width = ((state.levelIndex / LEVELS.length) * 100).toFixed(1) + "%";
+    }
+
+    function spawnStars() {
+      const rect = canvas.getBoundingClientRect();
+      for (let i = 0; i < 18; i += 1) {
+        state.stars.push({
+          x: rect.width * 0.7,
+          y: rect.height * 0.32,
+          vx: (Math.random() - 0.5) * 180,
+          vy: -Math.random() * 180,
+          life: 0.8 + Math.random() * 0.6
+        });
+      }
+    }
+
+    function update(dt) {
+      state.pulse += dt;
+      const victor = state.victor;
+      const course = state.course;
+      if (!victor || victor.finished) {
+        updateStars(dt);
+        return;
+      }
+
+      victor.trail.push({ x: victor.x, y: victor.y });
+      if (victor.trail.length > 16) victor.trail.shift();
+
+      if (!victor.airborne) {
+        victor.x += victor.vx * dt;
+        const slopeProgress = Math.min(victor.x / course.jumpStartX, 1);
+        victor.y = course.slopeStartY + slopeProgress * 105 + Math.sin(slopeProgress * Math.PI) * 10;
+        victor.vx += 22 * dt;
+
+        if (victor.x >= course.jumpStartX) {
+          victor.airborne = true;
+          victor.vy = -(220 + state.levelIndex * 7);
+          victor.maxHeight = victor.y;
+          state.message = "Nu! Lav " + describeGoal(LEVELS[state.levelIndex].goal);
+          updateHud();
+        }
+      } else {
+        const spinInput = (state.controls.spinRight ? 1 : 0) - (state.controls.spinLeft ? 1 : 0);
+        victor.spinRate += spinInput * 1600 * dt;
+        victor.spinRate *= 0.985;
+        victor.spinDeg += victor.spinRate * dt;
+
+        if (state.controls.flip) {
+          victor.flipRate += 2000 * dt;
+        } else {
+          victor.flipRate *= 0.99;
+        }
+
+        victor.flipRate = Math.min(victor.flipRate, 900);
+        victor.flipDeg += victor.flipRate * dt;
+
+        if (state.controls.grab) {
+          victor.grabTime += dt;
+          victor.totalGrabTime += dt;
+        } else {
+          victor.grabTime = 0;
+        }
+
+        victor.x += victor.vx * dt;
+        victor.vy += 520 * dt;
+        victor.y += victor.vy * dt;
+        victor.maxHeight = Math.min(victor.maxHeight, victor.y);
+
+        const landingY = getLandingY(victor.x);
+        if (victor.y >= landingY) {
+          victor.y = landingY;
+          victor.finished = true;
+          landLevel();
+        }
+
+        if (victor.x > course.width + 120) {
+          failLevel("Victor flakser ud af banen");
+        }
+      }
+
+      updateStars(dt);
+    }
+
+    function updateStars(dt) {
+      state.stars = state.stars.filter((star) => {
+        star.life -= dt;
+        star.x += star.vx * dt;
+        star.y += star.vy * dt;
+        star.vy += 220 * dt;
+        return star.life > 0;
+      });
+    }
+
+    function getLandingY(x) {
+      const course = state.course;
+      if (x < course.jumpStartX) return state.victor.y;
+      if (x < course.jumpStartX + course.jumpLength) {
+        const t = (x - course.jumpStartX) / course.jumpLength;
+        return course.slopeStartY + 105 - Math.sin(t * Math.PI) * course.jumpHeight;
+      }
+      const t = Math.min((x - (course.jumpStartX + course.jumpLength)) / (course.width * 0.26), 1);
+      return course.slopeStartY + 105 + t * (course.landingY - (course.slopeStartY + 105));
+    }
+
+    function drawBackground(width, height) {
+      const gradient = ctx.createLinearGradient(0, 0, 0, height);
+      gradient.addColorStop(0, "#9edbff");
+      gradient.addColorStop(1, "#f1fbff");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.fillStyle = "rgba(255,255,255,0.6)";
+      ctx.beginPath();
+      ctx.arc(width * 0.18, height * 0.16, 58, 0, Math.PI * 2);
+      ctx.fill();
+
+      for (let i = 0; i < 5; i += 1) {
+        const cx = width * (0.15 + i * 0.18) + Math.sin(state.pulse + i) * 8;
+        const cy = height * (0.16 + (i % 2) * 0.04);
+        drawCloud(cx, cy, 0.8 + i * 0.06);
+      }
+    }
+
+    function drawCloud(x, y, scale) {
+      ctx.fillStyle = "rgba(255,255,255,0.72)";
+      ctx.beginPath();
+      ctx.arc(x, y, 22 * scale, 0, Math.PI * 2);
+      ctx.arc(x + 22 * scale, y + 4 * scale, 18 * scale, 0, Math.PI * 2);
+      ctx.arc(x - 18 * scale, y + 8 * scale, 16 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawCourse(width, height) {
+      const course = state.course;
+      ctx.fillStyle = "#d8f2ff";
+      ctx.beginPath();
+      ctx.moveTo(0, course.slopeStartY);
+      for (let x = 0; x <= width; x += 10) {
+        ctx.lineTo(x, getLandingY(x));
+      }
+      ctx.lineTo(width, height);
+      ctx.lineTo(0, height);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(255,255,255,0.8)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, course.slopeStartY);
+      for (let x = 0; x <= width; x += 10) {
+        ctx.lineTo(x, getLandingY(x));
+      }
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(16, 32, 45, 0.09)";
+      for (let i = 0; i < 7; i += 1) {
+        const px = width * (0.08 + i * 0.13);
+        const py = getLandingY(px) + 4;
+        ctx.beginPath();
+        ctx.ellipse(px, py, 28, 6, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      drawPines(width, height);
+    }
+
+    function drawPines(width, height) {
+      for (let i = 0; i < 9; i += 1) {
+        const x = width * (0.06 + i * 0.11);
+        const baseY = getLandingY(x) + 6;
+        const size = 22 + (i % 3) * 8;
+        ctx.fillStyle = "#214e44";
+        ctx.beginPath();
+        ctx.moveTo(x, baseY - size * 2.3);
+        ctx.lineTo(x - size, baseY);
+        ctx.lineTo(x + size, baseY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#6d4d33";
+        ctx.fillRect(x - 3, baseY, 6, 12);
+      }
+    }
+
+    function drawVictor() {
+      const victor = state.victor;
+      if (!victor) return;
+
+      for (let i = 0; i < victor.trail.length; i += 1) {
+        const point = victor.trail[i];
+        const alpha = i / victor.trail.length;
+        ctx.fillStyle = "rgba(255,255,255," + (alpha * 0.16).toFixed(3) + ")";
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 5 + alpha * 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.save();
+      ctx.translate(victor.x, victor.y);
+
+      const spinRadians = (victor.spinDeg * Math.PI) / 180;
+      const flipRadians = (victor.flipDeg * Math.PI) / 180;
+      ctx.rotate(spinRadians * 0.35);
+      ctx.scale(1, Math.cos(flipRadians));
+
+      ctx.strokeStyle = victor.crashed ? "#ff8484" : "#17384d";
+      ctx.lineWidth = 4;
+      ctx.lineCap = "round";
+
+      ctx.beginPath();
+      ctx.moveTo(-18, 22);
+      ctx.lineTo(18, 22);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(-12, 4);
+      ctx.lineTo(-2, 18);
+      ctx.moveTo(12, 4);
+      ctx.lineTo(2, 18);
+      ctx.moveTo(0, -10);
+      ctx.lineTo(0, 8);
+      ctx.moveTo(0, -2);
+      if (state.controls.grab && victor.airborne) {
+        ctx.lineTo(-16, 6);
+        ctx.moveTo(0, -2);
+        ctx.lineTo(16, 8);
+      } else {
+        ctx.lineTo(-13, 2);
+        ctx.moveTo(0, -2);
+        ctx.lineTo(13, 2);
+      }
+      ctx.stroke();
+
+      ctx.fillStyle = "#f36c3e";
+      ctx.beginPath();
+      ctx.arc(0, -18, 11, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#fff0d7";
+      ctx.beginPath();
+      ctx.arc(0, -14, 6.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#ffce47";
+      ctx.fillRect(-13, -29, 26, 8);
+
+      ctx.restore();
+    }
+
+    function drawStars() {
+      state.stars.forEach((star) => {
+        ctx.save();
+        ctx.translate(star.x, star.y);
+        ctx.globalAlpha = Math.max(star.life, 0);
+        ctx.fillStyle = "#ffd869";
+        ctx.beginPath();
+        ctx.moveTo(0, -8);
+        ctx.lineTo(3, -2);
+        ctx.lineTo(9, 0);
+        ctx.lineTo(3, 2);
+        ctx.lineTo(0, 8);
+        ctx.lineTo(-3, 2);
+        ctx.lineTo(-9, 0);
+        ctx.lineTo(-3, -2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      });
+    }
+
+    function drawGoalCard(width, height) {
+      const goal = LEVELS[state.levelIndex].goal;
+      const airSpin = Math.round(Math.abs(state.victor.spinDeg) / 180) * 180;
+      const flips = Math.round(Math.abs(state.victor.flipDeg) / 360);
+      const grab = state.victor.totalGrabTime > 0.22 ? "Ja" : "Nej";
+      const x = 16;
+      const y = height - 160;
+      const w = Math.min(width - 32, 320);
+      const h = 106;
+
+      ctx.fillStyle = "rgba(10,25,37,0.72)";
+      ctx.strokeStyle = "rgba(255,255,255,0.14)";
+      ctx.lineWidth = 1;
+      roundRect(x, y, w, h, 18);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(255,255,255,0.72)";
+      ctx.font = "12px Trebuchet MS";
+      ctx.fillText("Air check", x + 14, y + 22);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 20px Trebuchet MS";
+      ctx.fillText(describeGoal(goal), x + 14, y + 48);
+
+      ctx.font = "14px Trebuchet MS";
+      ctx.fillText("Nu: " + airSpin + " / flips: " + flips + " / grab: " + grab, x + 14, y + 76);
+      ctx.fillText(state.message, x + 14, y + 96);
+    }
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function render() {
+      const width = canvas.clientWidth || window.innerWidth;
+      const height = canvas.clientHeight || window.innerHeight;
+      ctx.clearRect(0, 0, width, height);
+      drawBackground(width, height);
+      drawCourse(width, height);
+      drawVictor();
+      drawStars();
+      if (state.victor) {
+        drawGoalCard(width, height);
+      }
+    }
+
+    function loop(timestamp) {
+      if (!state.running) return;
+      const dt = Math.min((timestamp - state.lastTime) / 1000, 0.03);
+      state.lastTime = timestamp;
+      update(dt);
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    function bindButton(button, control) {
+      const set = (value) => {
+        state.controls[control] = value;
+        button.classList.toggle("active", value);
+      };
+
+      button.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        set(true);
+      });
+
+      ["pointerup", "pointercancel", "pointerleave"].forEach((type) => {
+        button.addEventListener(type, () => set(false));
+      });
+    }
+
+    const keyMap = {
+      ArrowLeft: "spinLeft",
+      a: "spinLeft",
+      A: "spinLeft",
+      ArrowRight: "spinRight",
+      d: "spinRight",
+      D: "spinRight",
+      ArrowUp: "flip",
+      w: "flip",
+      W: "flip",
+      " ": "grab"
+    };
+
+    document.addEventListener("keydown", (event) => {
+      const control = keyMap[event.key];
+      if (!control) return;
+      event.preventDefault();
+      state.controls[control] = true;
+      const button = document.querySelector('[data-control="' + control + '"]');
+      if (button) button.classList.add("active");
+    });
+
+    document.addEventListener("keyup", (event) => {
+      const control = keyMap[event.key];
+      if (!control) return;
+      state.controls[control] = false;
+      const button = document.querySelector('[data-control="' + control + '"]');
+      if (button) button.classList.remove("active");
+    });
+
+    buttons.forEach((button) => bindButton(button, button.dataset.control));
+
+    startButton.addEventListener("click", startGame);
+    window.addEventListener("resize", () => {
+      setCanvasSize();
+      state.course = buildCourse(state.levelIndex);
+      if (state.victor && !state.victor.airborne) {
+        state.victor.y = state.course.slopeStartY - 8;
+      }
+      render();
+    });
+
+    setCanvasSize();
+    resetVictor();
+    render();
+  </script>
+</body>
+</html>

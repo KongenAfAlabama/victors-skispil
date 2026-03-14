@@ -266,6 +266,7 @@
 <body>
   <div class="app">
     <canvas id="game" aria-label="Victors Skispil"></canvas>
+    <audio id="bgMusic" src="Grab.mp3" preload="auto" loop></audio>
 
     <div class="hud">
       <div class="hud-grid">
@@ -353,6 +354,7 @@
     const ctx = canvas.getContext("2d");
     const overlay = document.getElementById("overlay");
     const startButton = document.getElementById("startButton");
+    const bgMusic = document.getElementById("bgMusic");
     const leadText = document.querySelector(".lead");
     const levelLabel = document.getElementById("levelLabel");
     const goalLabel = document.getElementById("goalLabel");
@@ -481,6 +483,11 @@
       state.combo = 1;
       state.bestCombo = 1;
       state.stars = [];
+      bgMusic.volume = 0.55;
+      const playPromise = bgMusic.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => {});
+      }
       leadText.textContent =
         "Victor skal klare 20 baner. Hver bane giver dig et trick, som skal landes rent efter hoppet. Du kommer kun videre, hvis Victor lander pa skiene og matcher det krav, banen stiller.";
       startButton.textContent = "Start turen";

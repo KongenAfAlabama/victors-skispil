@@ -371,6 +371,7 @@
       stars: [],
       particles: [],
       cameraX: 0,
+      shake: 0,
       victor: null,
       course: null,
       controls: {
@@ -486,6 +487,7 @@
 
     function failLevel(reason) {
       state.message = reason;
+      state.shake = 16;
       state.victor.crashed = true;
       state.victor.finished = true;
       setTimeout(() => {
@@ -509,6 +511,7 @@
         const points = LEVELS[state.levelIndex].points + Math.round(state.victor.totalGrabTime * 150);
         state.score += points;
         state.message = "Perfekt landing! +" + points;
+        state.shake = 10;
         spawnStars();
         updateHud();
         setTimeout(() => {
@@ -567,6 +570,7 @@
 
     function update(dt) {
       state.pulse += dt;
+      state.shake = Math.max(0, state.shake - dt * 22);
       const victor = state.victor;
       if (!victor || victor.finished) {
         updateStars(dt);
@@ -625,6 +629,11 @@
         }
       }
 
+      if (victor.worldY > state.course.height + 260 || Number.isNaN(victor.worldY) || Number.isNaN(victor.worldX)) {
+        failLevel("Victor rutsjede ud af banen");
+        return;
+      }
+
       const targetCamera = victor.worldX - state.course.width * 0.28;
       state.cameraX = lerp(
         state.cameraX,
@@ -656,26 +665,31 @@
     function getLandingY(worldX) {
       const course = state.course;
       const x = clamp(worldX, 0, course.worldLength);
+      const takeoffLength = course.takeoffEndX - course.jumpStartX;
+      const airLength = course.landingStartX - course.takeoffEndX;
+      const landingLength = course.landingEndX - course.landingStartX;
+      const takeoffBaseY =
+        course.baseY + course.slopeDrop - Math.sin(Math.PI * 0.9) * (86 + state.levelIndex * 4) - 18;
+      const landingTopY = takeoffBaseY + 28;
+
       if (x < course.jumpStartX) {
         const t = x / course.jumpStartX;
         return course.baseY + t * course.slopeDrop + Math.sin(t * Math.PI * 1.2) * 16;
       }
       if (x < course.takeoffEndX) {
-        const t = (x - course.jumpStartX) / (course.takeoffEndX - course.jumpStartX);
+        const t = (x - course.jumpStartX) / takeoffLength;
         return course.baseY + course.slopeDrop - Math.sin(t * Math.PI * 0.9) * (86 + state.levelIndex * 4) - t * 18;
       }
       if (x < course.landingStartX) {
-        const t = (x - course.takeoffEndX) / (course.landingStartX - course.takeoffEndX);
-        const takeoffY = getLandingY(course.takeoffEndX);
-        return takeoffY - 8 + (1 - Math.pow(1 - t, 2)) * 36;
+        const t = (x - course.takeoffEndX) / airLength;
+        return takeoffBaseY - 8 + (1 - Math.pow(1 - t, 2)) * 36;
       }
       if (x < course.landingEndX) {
-        const t = (x - course.landingStartX) / (course.landingEndX - course.landingStartX);
-        const landingTop = getLandingY(course.landingStartX);
-        return landingTop + t * course.landingRise + Math.sin(t * Math.PI) * 12;
+        const t = (x - course.landingStartX) / landingLength;
+        return landingTopY + t * course.landingRise + Math.sin(t * Math.PI) * 12;
       }
       const t = (x - course.landingEndX) / Math.max(course.worldLength - course.landingEndX, 1);
-      return getLandingY(course.landingEndX) + t * 140 + Math.sin(t * Math.PI * 3) * 12;
+      return landingTopY + course.landingRise + t * 140 + Math.sin(t * Math.PI * 3) * 12;
     }
 
     function getGroundAngle(worldX) {
@@ -983,6 +997,10 @@
       const width = canvas.clientWidth || window.innerWidth;
       const height = canvas.clientHeight || window.innerHeight;
       ctx.clearRect(0, 0, width, height);
+      const shakeX = state.shake ? (Math.random() - 0.5) * state.shake : 0;
+      const shakeY = state.shake ? (Math.random() - 0.5) * state.shake * 0.7 : 0;
+      ctx.save();
+      ctx.translate(shakeX, shakeY);
       drawBackground(width, height);
       drawCourse(width, height);
       drawVictor();
@@ -990,6 +1008,7 @@
       if (state.victor) {
         drawGoalCard(width, height);
       }
+      ctx.restore();
     }
 
     function loop(timestamp) {
